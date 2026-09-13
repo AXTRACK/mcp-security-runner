@@ -93,23 +93,32 @@ def run_fixture(sha: str, name: str, entrypoint: str, timeout: int) -> dict:
     return result
 
 
-def observation(result: dict, observation_type: str) -> list[dict]:
-    return [item for item in result.get("observations", []) if item.get("type") == observation_type]
+def observation(result: dict, observation_type: str, phase: str | None = None) -> list[dict]:
+    items = [item for item in result.get("observations", []) if item.get("type") == observation_type]
+    if phase is not None:
+        items = [item for item in items if item.get("phase") == phase]
+    return items
 
 
 def assert_safe(result: dict) -> None:
     assert result["execution"]["status"] == "COMPLETED", result
-    protocol = observation(result, "protocol_output")
+    protocol = observation(result, "protocol_output", "EXERCISE")
     assert protocol, result
-    server_info = protocol[0]["data"]["initialize_response"]["result"]["serverInfo"]
-    assert server_info["name"] == "safe-fixture", result
-    filesystem = observation(result, "filesystem_changes")
-    assert filesystem and "safe-fixture-output.txt" in filesystem[0]["data"]["paths"], result
+    initialize_result = protocol[0]["data"]["initialize_response"]["result"]
+    assert initialize_result["protocolVersion"] == "2025-06-18", result
+    assert initialize_result["capabilities"] == {}, result
+    assert initialize_result["serverInfo"]["name"] == "safe-fixture", result
+    install_fs = observation(result, "filesystem_changes", "INSTALL")
+    exercise_fs = observation(result, "filesystem_changes", "EXERCISE")
+    assert install_fs, result
+    assert exercise_fs, result
+    assert "safe-fixture-initialized.txt" in exercise_fs[0]["data"]["paths"], result
+    assert "safe-fixture-initialized.txt" not in install_fs[0]["data"]["paths"], result
 
 
 def assert_noisy(result: dict) -> None:
     assert result["execution"]["status"] == "COMPLETED", result
-    filesystem = observation(result, "filesystem_changes")
+    filesystem = observation(result, "filesystem_changes", "EXERCISE")
     assert filesystem and "noisy-fixture-output.txt" in filesystem[0]["data"]["paths"], result
     assert observation(result, "process_trace"), result
     assert observation(result, "network_trace"), result
