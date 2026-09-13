@@ -62,10 +62,13 @@ def validate_initialize_response(response: dict) -> dict:
     result = response.get("result")
     if not isinstance(result, dict):
         raise TargetFailure("MCP initialize result must be an object")
-    if result.get("protocolVersion") != SUPPORTED_PROTOCOL_VERSION:
+    protocol_version = result.get("protocolVersion")
+    if not isinstance(protocol_version, str) or not protocol_version.strip():
+        raise TargetFailure("MCP initialize protocolVersion must be a non-empty string")
+    if protocol_version != SUPPORTED_PROTOCOL_VERSION:
         raise Unsupported(
             "MCP initialize negotiated unsupported protocolVersion: "
-            + sanitize(str(result.get("protocolVersion")))
+            + sanitize(protocol_version)
         )
     if not isinstance(result.get("capabilities"), dict):
         raise TargetFailure("MCP initialize capabilities must be an object")
