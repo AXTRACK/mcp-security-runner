@@ -31,6 +31,7 @@ TRACE_ROOT = TRUSTED_ROOT / "traces"
 OUTPUT_LIMIT = 256 * 1024
 PHASE_LIMITS = {"ACQUIRE": 120, "INSTALL": 180, "START": 60, "EXERCISE": 120, "STOP": 30}
 CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x1b]")
+SUPPORTED_PROTOCOL_VERSION = "2025-06-18"
 
 
 class PhaseTimeout(RuntimeError):
@@ -55,6 +56,27 @@ def sanitize(text: str, limit: int = 4096) -> str:
     text = CONTROL_RE.sub("?", text)
     text = text.replace("::", ": :")
     return text[:limit]
+
+
+def validate_initialize_response(response: dict) -> dict:
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise TargetFailure("MCP initialize result must be an object")
+    if result.get("protocolVersion") != SUPPORTED_PROTOCOL_VERSION:
+        raise TargetFailure(
+            "MCP initialize negotiated unsupported protocolVersion: "
+            + sanitize(str(result.get("protocolVersion")))
+        )
+    if not isinstance(result.get("capabilities"), dict):
+        raise TargetFailure("MCP initialize capabilities must be an object")
+    server_info = result.get("serverInfo")
+    if not isinstance(server_info, dict):
+        raise TargetFailure("MCP initialize serverInfo must be an object")
+    if not isinstance(server_info.get("name"), str) or not server_info["name"].strip():
+        raise TargetFailure("MCP initialize serverInfo.name must be a non-empty string")
+    if not isinstance(server_info.get("version"), str) or not server_info["version"].strip():
+        raise TargetFailure("MCP initialize serverInfo.version must be a non-empty string")
+    return result
 
 
 def target_path() -> str:
@@ -307,7 +329,7 @@ def run_mcp_initialize(
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": "2025-06-18",
+            "protocolVersion": SUPPORTED_PROTOCOL_VERSION,
             "capabilities": {},
             "clientInfo": {"name": "mcp-security-runner", "version": "1"},
         },
@@ -345,6 +367,7 @@ def run_mcp_initialize(
                 "MCP initialize returned JSON-RPC error: "
                 + sanitize(json.dumps(response["error"], ensure_ascii=False))
             )
+        validate_initialize_response(response)
 
         try:
             proc.stdin.write((json.dumps(initialized, separators=(",", ":")) + "\n").encode())
@@ -442,6 +465,22 @@ def snapshot(root: Path) -> dict[str, tuple[int, int]]:
     return result
 
 
+def filesystem_observation(
+    before: dict[str, tuple[int, int]],
+    after: dict[str, tuple[int, int]],
+    phase: str,
+) -> dict:
+    changed = sorted(key for key in set(before) | set(after) if before.get(key) != after.get(key))[:1000]
+    return {
+        "phase": phase,
+        "type": "filesystem_changes",
+        "data": {
+            "paths": changed,
+            "limitation": "workspace metadata only; content not captured; first 1000 changed paths",
+        },
+    }
+
+
 def parse_traces(phases: Iterable[str], evidence: set[str]) -> list[dict]:
     observations = []
     for phase in phases:
@@ -509,12 +548,12 @@ def main() -> int:
             {
                 "name": "filesystem_snapshot",
                 "categories": sorted(requested & {"filesystem"}),
-                "limitation": "workspace metadata only; .git excluded",
+                "limitation": "workspace metadata only; .git excluded; install and exercise changes are separated",
             },
             {
                 "name": "protocol_capture",
                 "categories": sorted(requested & {"protocol"}),
-                "limitation": "bounded newline-delimited JSON-RPC capture for mcp_initialize only",
+                "limitation": "bounded newline-delimited JSON-RPC capture for legacy mcp_initialize only",
             },
         ]
         phases.append("ACQUIRE")
@@ -524,7 +563,7 @@ def main() -> int:
         if not lockfile.is_file():
             raise Unsupported("node_stdio requires package-lock.json")
         result["provenance"]["lockfile_sha256"] = sha256(lockfile)
-        before = snapshot(WORKSPACE) if "filesystem" in requested else {}
+        after_acquire = snapshot(WORKSPACE) if "filesystem" in requested else {}
         rc, node_version, _ = run_bounded(["node", "--version"], "INSTALL", 10)
         if rc:
             raise Unsupported("Node.js is unavailable")
@@ -549,6 +588,9 @@ def main() -> int:
         if rc:
             result["errors"].append({"phase": "INSTALL", "message": sanitize(err or out)})
             raise TargetFailure("Target dependency installation failed")
+        after_install = snapshot(WORKSPACE) if "filesystem" in requested else {}
+        if "filesystem" in requested:
+            result["observations"].append(filesystem_observation(after_acquire, after_install, "INSTALL"))
         entrypoint = contained_entrypoint(req)
         phases.extend(["START", "EXERCISE"])
         out, err, response = run_mcp_initialize(
@@ -572,15 +614,8 @@ def main() -> int:
         status = "COMPLETED"
         phases.extend(["STOP", "COLLECT"])
         if "filesystem" in requested:
-            after = snapshot(WORKSPACE)
-            changed = sorted(key for key in set(before) | set(after) if before.get(key) != after.get(key))[:1000]
-            result["observations"].append(
-                {
-                    "phase": "COLLECT",
-                    "type": "filesystem_changes",
-                    "data": {"paths": changed, "limitation": "workspace metadata only; content not captured"},
-                }
-            )
+            after_exercise = snapshot(WORKSPACE)
+            result["observations"].append(filesystem_observation(after_install, after_exercise, "EXERCISE"))
         result["observations"].extend(parse_traces(phases, requested))
     except RequestError as exc:
         status = "RUNTIME_UNSUPPORTED"
