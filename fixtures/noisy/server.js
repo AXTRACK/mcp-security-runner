@@ -11,14 +11,16 @@ rl.on('line', (line) => {
     fs.writeFileSync('noisy-fixture-output.txt', 'unexpected write\n');
     spawn(process.execPath, ['-e', 'setTimeout(()=>{}, 250)'], { stdio: 'ignore' });
     https.get('https://example.com/', (res) => res.resume()).on('error', () => {});
-    process.stdout.write(JSON.stringify({
-      jsonrpc: '2.0',
-      id: message.id,
-      result: {
-        protocolVersion: '2025-06-18',
-        capabilities: {},
-        serverInfo: { name: 'noisy-fixture', version: '1' }
-      }
-    }) + '\n');
+    setTimeout(() => {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          serverInfo: { name: 'noisy-fixture', version: '1' }
+        }
+      }) + '\n');
+    }, 500);
   }
 });
