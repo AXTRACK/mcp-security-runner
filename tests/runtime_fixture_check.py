@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import pwd
 import shutil
@@ -41,6 +42,21 @@ def request(sha: str, entrypoint: str, timeout: int) -> dict:
     }
 
 
+def assert_workspace_isolation(target_uid: int) -> None:
+    workspace = os.environ.get("GITHUB_WORKSPACE")
+    if not workspace:
+        return
+    trusted_file = str(Path(workspace) / "runner" / "run_review.py")
+    readable = subprocess.run(
+        ["runuser", "-u", "mcp_target", "--", "test", "-r", trusted_file],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if readable.returncode == 0:
+        raise AssertionError(f"target uid {target_uid} can read the trusted harness checkout")
+
+
 def run_fixture(sha: str, name: str, entrypoint: str, timeout: int) -> dict:
     reset_runtime()
     request_file = TMP_ROOT / f"{name}-request.json"
@@ -64,6 +80,7 @@ def run_fixture(sha: str, name: str, entrypoint: str, timeout: int) -> dict:
         target = pwd.getpwnam("mcp_target")
     except KeyError as exc:
         raise AssertionError("target account was not created") from exc
+    assert_workspace_isolation(target.pw_uid)
     lingering = subprocess.run(
         ["pgrep", "-u", str(target.pw_uid)],
         stdout=subprocess.PIPE,
