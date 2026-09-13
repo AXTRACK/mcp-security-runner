@@ -6,7 +6,6 @@ const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity 
 rl.on('line', (line) => {
   const message = JSON.parse(line);
   if (message.method === 'initialize') {
-    fs.writeFileSync('safe-fixture-output.txt', 'initialized\n');
     process.stdout.write(JSON.stringify({
       jsonrpc: '2.0',
       id: message.id,
@@ -16,5 +15,8 @@ rl.on('line', (line) => {
         serverInfo: { name: 'safe-fixture', version: '1' }
       }
     }) + '\n');
+  }
+  if (message.method === 'notifications/initialized') {
+    fs.writeFileSync('safe-fixture-initialized.txt', 'initialized notification received\n');
   }
 });
