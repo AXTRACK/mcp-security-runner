@@ -1,0 +1,55 @@
+name: Bounded MCP runtime review
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_json:
+        description: Bounded runtime request JSON
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install trusted observation dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends strace
+
+      - name: Materialize request as data
+        env:
+          REQUEST_JSON: ${{ inputs.request_json }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "request.json"
+          path.write_text(os.environ["REQUEST_JSON"], encoding="utf-8")
+          path.chmod(0o600)
+          PY
+
+      - name: Run bounded harness
+        run: |
+          sudo chmod 700 /home/runner
+          sudo python3 runner/run_review.py \
+            --request-file "$RUNNER_TEMP/request.json" \
+            --result-file "$RUNNER_TEMP/result.json"
+
+      - name: Upload bounded result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mcp-runtime-result
+          path: ${{ runner.temp }}/result.json
+          if-no-files-found: warn
+          retention-days: 3
