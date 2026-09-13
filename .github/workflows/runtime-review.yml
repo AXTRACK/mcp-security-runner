@@ -40,6 +40,7 @@ jobs:
 
       - name: Run bounded harness
         run: |
+          sudo chmod 700 /home/runner
           sudo python3 runner/run_review.py \
             --request-file "$RUNNER_TEMP/request.json" \
             --result-file "$RUNNER_TEMP/result.json"
