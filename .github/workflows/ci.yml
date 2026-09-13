@@ -18,6 +18,28 @@ jobs:
         with:
           persist-credentials: false
       - name: Compile harness
-        run: python3 -m py_compile runner/*.py
+        run: python3 -m py_compile runner/*.py tests/runtime_fixture_check.py
       - name: Run deterministic tests
-        run: python3 -m unittest discover -s tests -v
+        run: python3 -m unittest discover -s tests -p "test_*.py" -v
+
+  runtime-fixtures:
+    needs: deterministic-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install observation dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends strace
+      - name: Restrict trusted runner workspace
+        run: |
+          sudo chmod 700 /home/runner
+          sudo chmod 700 "$GITHUB_WORKSPACE"
+      - name: Run controlled runtime fixtures
+        run: sudo python3 tests/runtime_fixture_check.py --sha "$TARGET_SHA"

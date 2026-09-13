@@ -38,9 +38,13 @@ jobs:
           path.chmod(0o600)
           PY
 
-      - name: Run bounded harness
+      - name: Restrict trusted runner workspace
         run: |
           sudo chmod 700 /home/runner
+          sudo chmod 700 "$GITHUB_WORKSPACE"
+
+      - name: Run bounded harness
+        run: |
           sudo python3 runner/run_review.py \
             --request-file "$RUNNER_TEMP/request.json" \
             --result-file "$RUNNER_TEMP/result.json"
