@@ -16,5 +16,8 @@ class WorkflowTests(unittest.TestCase):
         text = Path('.github/workflows/runtime-review.yml').read_text(encoding='utf-8')
         self.assertNotIn('actions/checkout@v', text)
         self.assertNotIn('actions/upload-artifact@v', text)
+    def test_target_cannot_traverse_runner_home(self):
+        text = Path('.github/workflows/runtime-review.yml').read_text(encoding='utf-8')
+        self.assertIn('sudo chmod 700 /home/runner', text)
 
 if __name__ == '__main__': unittest.main()
