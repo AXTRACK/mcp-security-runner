@@ -61,7 +61,7 @@ def run_fixture(sha: str, name: str, entrypoint: str, timeout: int) -> dict:
     reset_runtime()
     request_file = TMP_ROOT / f"{name}-request.json"
     result_file = TMP_ROOT / f"{name}-result.json"
-    request_file.write_text(json.dumps(request(sha, entrypoint)), encoding="utf-8")
+    request_file.write_text(json.dumps(request(sha, entrypoint, timeout)), encoding="utf-8")
     completed = subprocess.run(
         [
             sys.executable,
