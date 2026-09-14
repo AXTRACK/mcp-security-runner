@@ -9,6 +9,10 @@ import shutil
 import subprocess
 import sys
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from runner.run_review import TARGET_NOFILE_LIMIT, ensure_target_user, run_bounded
 
 TARGET_ROOT = Path("/tmp/mcp-security-target")
