@@ -29,6 +29,7 @@ TARGET_TMP = TARGET_ROOT / "tmp"
 TRUSTED_ROOT = Path("/tmp/mcp-security-trusted")
 TRACE_ROOT = TRUSTED_ROOT / "traces"
 OUTPUT_LIMIT = 256 * 1024
+TARGET_NOFILE_LIMIT = 4096
 PHASE_LIMITS = {"ACQUIRE": 120, "INSTALL": 180, "START": 60, "EXERCISE": 120, "STOP": 30}
 CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x1b]")
 SUPPORTED_PROTOCOL_VERSION = "2025-06-18"
@@ -137,7 +138,7 @@ def target_command(command: list[str], phase: str, timeout: int, trace: bool = F
     limited = [
         "prlimit",
         "--nproc=128",
-        "--nofile=256",
+        f"--nofile={TARGET_NOFILE_LIMIT}",
         "--fsize=67108864",
         f"--cpu={max(5, timeout)}",
         "--",
