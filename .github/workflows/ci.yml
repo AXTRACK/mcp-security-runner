@@ -46,4 +46,4 @@ jobs:
           sudo chmod 700 /home/runner
           sudo chmod 700 "$GITHUB_WORKSPACE"
       - name: Run controlled runtime fixtures
-        run: sudo python3 tests/runtime_fixture_check.py --sha "$TARGET_SHA"
+        run: sudo env "PATH=$PATH" python3 tests/runtime_fixture_check.py --sha "$TARGET_SHA"
