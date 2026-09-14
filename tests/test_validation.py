@@ -3,7 +3,15 @@ from pathlib import Path
 import shutil
 import unittest
 
-from runner.run_review import TargetFailure, Unsupported, sanitize, target_env, validate_initialize_response
+from runner.run_review import (
+    TARGET_NOFILE_LIMIT,
+    TargetFailure,
+    Unsupported,
+    sanitize,
+    target_command,
+    target_env,
+    validate_initialize_response,
+)
 
 
 class ValidationTests(unittest.TestCase):
@@ -26,6 +34,12 @@ class ValidationTests(unittest.TestCase):
         if node is None:
             self.skipTest("node is not installed")
         self.assertIn(str(Path(node).parent), target_env()["PATH"].split(os.pathsep))
+
+    def test_target_open_file_limit_is_bounded_with_npm_headroom(self):
+        self.assertEqual(TARGET_NOFILE_LIMIT, 4096)
+        command = target_command(["node", "--version"], "INSTALL", 10)
+        self.assertIn("--nofile=4096", command)
+        self.assertNotIn("--nofile=unlimited", command)
 
     def test_accepts_valid_legacy_initialize_result(self):
         response = {
