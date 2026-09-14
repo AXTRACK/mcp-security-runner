@@ -36,10 +36,11 @@ def write_result_with_prepare(path, result):
     provenance = result.setdefault("provenance", {})
     provenance["prepare_profile"] = profile
     if profile == "npm_build":
-        prepare_failed = any(
-            error.get("message", "").startswith("Target preparation failed:")
-            for error in result.get("errors", [])
-        )
+        prepare_failed = False
+        for error in result.get("errors", []):
+            if error.get("message", "").startswith("Target preparation failed:"):
+                error["phase"] = "PREPARE"
+                prepare_failed = True
         provenance["prepare_status"] = "FAILED" if prepare_failed else "COMPLETED"
         if _prepare_observation is not None:
             prepare_paths = set(_prepare_observation["data"]["paths"])
