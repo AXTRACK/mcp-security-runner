@@ -1,5 +1,8 @@
 {
   "name": "mcp-security-runner-fixtures",
   "version": "1.0.0",
-  "private": true
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-fixture.js"
+  }
 }

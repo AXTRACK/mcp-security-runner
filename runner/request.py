@@ -8,11 +8,14 @@ import re
 _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _ALLOWED_EVIDENCE = {"network", "process", "filesystem", "protocol"}
-_FORBIDDEN_KEYS = {"install_command", "startup_command", "test_command", "shell_script"}
+_FORBIDDEN_KEYS = {"install_command", "startup_command", "test_command", "shell_script", "build_command"}
 _ALLOWED_STOP_CONDITIONS = {"output_capture_limit"}
+_ALLOWED_PREPARE_PROFILES = {"NONE", "npm_build"}
+
 
 class RequestError(ValueError):
     pass
+
 
 @dataclass(frozen=True)
 class RuntimeRequest:
@@ -25,6 +28,7 @@ class RuntimeRequest:
     evidence: tuple[str, ...]
     timeout_seconds: int
     stop_conditions: tuple[str, ...]
+    prepare_profile: str
 
     @classmethod
     def parse(cls, text: str) -> "RuntimeRequest":
@@ -55,6 +59,9 @@ class RuntimeRequest:
             raise RequestError("Only OPEN network mode is supported in v1")
         if raw.get("credentials") != "NONE":
             raise RequestError("credentials must be NONE in v1")
+        prepare_profile = raw.get("prepare_profile", "NONE")
+        if not isinstance(prepare_profile, str) or prepare_profile not in _ALLOWED_PREPARE_PROFILES:
+            raise RequestError("prepare_profile must be NONE or npm_build")
         question = raw.get("question")
         if not isinstance(question, str) or not question.strip() or len(question) > 1000:
             raise RequestError("question must be a non-empty string up to 1000 characters")
@@ -82,4 +89,15 @@ class RuntimeRequest:
             raise RequestError("stop_conditions must be an array of bounded strings")
         if any(v not in _ALLOWED_STOP_CONDITIONS for v in stops):
             raise RequestError("Unsupported stop condition; v1 supports only output_capture_limit")
-        return cls(raw, repository, ref.lower(), question.strip(), entrypoint, tuple(argv), tuple(evidence), timeout, tuple(stops))
+        return cls(
+            raw,
+            repository,
+            ref.lower(),
+            question.strip(),
+            entrypoint,
+            tuple(argv),
+            tuple(evidence),
+            timeout,
+            tuple(stops),
+            prepare_profile,
+        )

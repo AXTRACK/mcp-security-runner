@@ -45,7 +45,7 @@ jobs:
 
       - name: Run bounded harness
         run: |
-          sudo python3 runner/run_review.py \
+          sudo python3 runner/run_review_with_prepare.py \
             --request-file "$RUNNER_TEMP/request.json" \
             --result-file "$RUNNER_TEMP/result.json"
 
