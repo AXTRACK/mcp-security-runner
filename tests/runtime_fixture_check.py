@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 
+from runner.run_review import TARGET_NOFILE_LIMIT, ensure_target_user, run_bounded
+
 TARGET_ROOT = Path("/tmp/mcp-security-target")
 TRUSTED_ROOT = Path("/tmp/mcp-security-trusted")
 TMP_ROOT = Path("/tmp/mcp-security-fixture-check")
@@ -50,6 +52,23 @@ def assert_workspace_isolation(target_uid: int) -> None:
     )
     if readable.returncode == 0:
         raise AssertionError(f"target uid {target_uid} can read the trusted harness checkout")
+
+
+def assert_open_file_headroom() -> None:
+    reset_runtime()
+    ensure_target_user()
+    script = (
+        "const fs=require('fs');"
+        "const fds=[];"
+        "for(let i=0;i<512;i++)fds.push(fs.openSync('/dev/null','r'));"
+        "process.stdout.write(String(fds.length));"
+        "for(const fd of fds)fs.closeSync(fd);"
+    )
+    rc, out, err = run_bounded(["node", "-e", script], "INSTALL", 10)
+    if rc != 0 or out.strip() != "512":
+        raise AssertionError(
+            f"bounded nofile headroom failed (limit={TARGET_NOFILE_LIMIT}, rc={rc}): {err or out}"
+        )
 
 
 def run_fixture(sha: str, name: str, entrypoint: str, timeout: int, prepare_profile: str = "NONE") -> dict:
@@ -133,6 +152,7 @@ def main() -> int:
     args = parser.parse_args()
     if len(args.sha) != 40:
         raise SystemExit("--sha must be a 40-character commit SHA")
+    assert_open_file_headroom()
     safe = run_fixture(args.sha, "safe", "fixtures/safe/server.js", 15)
     assert_safe(safe)
     build = run_fixture(args.sha, "build", "fixtures/build/dist/server.js", 15, "npm_build")
